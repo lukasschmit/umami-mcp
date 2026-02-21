@@ -4,6 +4,8 @@
 import json
 import os
 import sys
+import time
+from datetime import datetime, timezone
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -19,6 +21,7 @@ UMAMI_PASSWORD = os.environ.get("UMAMI_PASSWORD", "")
 UMAMI_USER_AGENT = os.environ.get("UMAMI_USER_AGENT", "umami-mcp/1.0")
 UMAMI_CF_ACCESS_CLIENT_ID = os.environ.get("UMAMI_CF_ACCESS_CLIENT_ID", "")
 UMAMI_CF_ACCESS_CLIENT_SECRET = os.environ.get("UMAMI_CF_ACCESS_CLIENT_SECRET", "")
+UMAMI_DEBUG = os.environ.get("UMAMI_DEBUG", "").lower() in {"1", "true", "yes", "on"}
 
 # Cloud uses /v1 path prefix; self-hosted uses /api
 _is_cloud = bool(UMAMI_API_KEY)
@@ -102,6 +105,8 @@ def _api_get(path: str, params: dict | None = None) -> object:
         clean = {k: v for k, v in params.items() if v is not None}
         if clean:
             url += "?" + urllib.parse.urlencode(clean)
+    if UMAMI_DEBUG:
+        print(f"[umami-mcp] GET {url}", file=sys.stderr)
     req = urllib.request.Request(url, headers={**_get_request_headers(), **_get_auth_headers()})
     try:
         with urllib.request.urlopen(req) as resp:
@@ -146,6 +151,11 @@ FILTER_PARAMS = [
     {"name": "tag", "description": "Filter by tag", "required": False},
 ]
 
+RANGE_DESCRIPTION = (
+    "Convenience range in UTC: last_24h, last_7d, last_30d, this_month, last_month. "
+    "Use this instead of startAt/endAt to avoid timestamp mistakes."
+)
+
 
 def _pick_filters(args: dict) -> dict:
     """Extract filter params from tool arguments, dropping None values."""
@@ -154,6 +164,67 @@ def _pick_filters(args: dict) -> dict:
         for p in FILTER_PARAMS
         if args.get(p["name"]) is not None
     }
+
+
+def _ms_ts(value: object, field_name: str) -> int:
+    """Parse Unix milliseconds from MCP args, accepting int or numeric strings."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    raise ValueError(f"Invalid {field_name}: expected Unix milliseconds as integer")
+
+
+def _month_start_ms(ref_ms: int) -> int:
+    dt = datetime.fromtimestamp(ref_ms / 1000, tz=timezone.utc)
+    start = dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return int(start.timestamp() * 1000)
+
+
+def _shift_month_start_ms(month_start_ms: int, months_delta: int) -> int:
+    dt = datetime.fromtimestamp(month_start_ms / 1000, tz=timezone.utc)
+    year = dt.year
+    month = dt.month + months_delta
+    while month <= 0:
+        month += 12
+        year -= 1
+    while month > 12:
+        month -= 12
+        year += 1
+    shifted = datetime(year, month, 1, tzinfo=timezone.utc)
+    return int(shifted.timestamp() * 1000)
+
+
+def _resolve_time_range(args: dict) -> tuple[int, int]:
+    has_start = args.get("startAt") is not None
+    has_end = args.get("endAt") is not None
+    if has_start or has_end:
+        if not (has_start and has_end):
+            raise ValueError("Provide both startAt and endAt, or use range.")
+        return _ms_ts(args["startAt"], "startAt"), _ms_ts(args["endAt"], "endAt")
+
+    range_name = args.get("range")
+    if not range_name:
+        raise ValueError(
+            "Missing time range. Provide startAt/endAt (Unix ms) or range "
+            "(last_24h, last_7d, last_30d, this_month, last_month)."
+        )
+
+    now = int(time.time() * 1000)
+    if range_name == "last_24h":
+        return now - 24 * 60 * 60 * 1000, now
+    if range_name == "last_7d":
+        return now - 7 * 24 * 60 * 60 * 1000, now
+    if range_name == "last_30d":
+        return now - 30 * 24 * 60 * 60 * 1000, now
+    if range_name == "this_month":
+        return _month_start_ms(now), now
+    if range_name == "last_month":
+        this_month_start = _month_start_ms(now)
+        last_month_start = _shift_month_start_ms(this_month_start, -1)
+        return last_month_start, this_month_start - 1
+
+    raise ValueError(f"Invalid range: {range_name}")
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +276,11 @@ TOOLS = [
                     "type": "integer",
                     "description": "End timestamp in Unix milliseconds",
                 },
+                "range": {
+                    "type": "string",
+                    "enum": ["last_24h", "last_7d", "last_30d", "this_month", "last_month"],
+                    "description": RANGE_DESCRIPTION,
+                },
                 "compare": {
                     "type": "string",
                     "enum": ["prev", "yoy"],
@@ -215,7 +291,7 @@ TOOLS = [
                     for p in FILTER_PARAMS
                 },
             },
-            "required": ["websiteId", "startAt", "endAt"],
+            "required": ["websiteId"],
         },
     },
     {
@@ -234,6 +310,11 @@ TOOLS = [
                 "endAt": {
                     "type": "integer",
                     "description": "End timestamp in Unix milliseconds",
+                },
+                "range": {
+                    "type": "string",
+                    "enum": ["last_24h", "last_7d", "last_30d", "this_month", "last_month"],
+                    "description": RANGE_DESCRIPTION,
                 },
                 "unit": {
                     "type": "string",
@@ -254,7 +335,7 @@ TOOLS = [
                     for p in FILTER_PARAMS
                 },
             },
-            "required": ["websiteId", "startAt", "endAt", "unit", "timezone"],
+            "required": ["websiteId", "unit", "timezone"],
         },
     },
     {
@@ -274,6 +355,11 @@ TOOLS = [
                 "endAt": {
                     "type": "integer",
                     "description": "End timestamp in Unix milliseconds",
+                },
+                "range": {
+                    "type": "string",
+                    "enum": ["last_24h", "last_7d", "last_30d", "this_month", "last_month"],
+                    "description": RANGE_DESCRIPTION,
                 },
                 "type": {
                     "type": "string",
@@ -314,7 +400,7 @@ TOOLS = [
                     for p in FILTER_PARAMS
                 },
             },
-            "required": ["websiteId", "startAt", "endAt", "type"],
+            "required": ["websiteId", "type"],
         },
     },
     {
@@ -345,9 +431,10 @@ def handle_get_websites(args: dict) -> object:
 
 
 def handle_get_stats(args: dict) -> object:
+    start_at, end_at = _resolve_time_range(args)
     params = {
-        "startAt": args["startAt"],
-        "endAt": args["endAt"],
+        "startAt": start_at,
+        "endAt": end_at,
         **_pick_filters(args),
     }
     if args.get("compare"):
@@ -356,9 +443,10 @@ def handle_get_stats(args: dict) -> object:
 
 
 def handle_get_pageviews(args: dict) -> object:
+    start_at, end_at = _resolve_time_range(args)
     params = {
-        "startAt": args["startAt"],
-        "endAt": args["endAt"],
+        "startAt": start_at,
+        "endAt": end_at,
         "unit": args["unit"],
         "timezone": args["timezone"],
         **_pick_filters(args),
@@ -369,10 +457,11 @@ def handle_get_pageviews(args: dict) -> object:
 
 
 def handle_get_metrics(args: dict) -> object:
+    start_at, end_at = _resolve_time_range(args)
     metric_type = args["type"]
     params = {
-        "startAt": args["startAt"],
-        "endAt": args["endAt"],
+        "startAt": start_at,
+        "endAt": end_at,
         "type": metric_type,
         **_pick_filters(args),
     }
