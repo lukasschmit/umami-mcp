@@ -16,6 +16,9 @@ UMAMI_URL = os.environ.get("UMAMI_URL", "").rstrip("/")
 UMAMI_API_KEY = os.environ.get("UMAMI_API_KEY", "")
 UMAMI_USERNAME = os.environ.get("UMAMI_USERNAME", "")
 UMAMI_PASSWORD = os.environ.get("UMAMI_PASSWORD", "")
+UMAMI_USER_AGENT = os.environ.get("UMAMI_USER_AGENT", "umami-mcp/1.0")
+UMAMI_CF_ACCESS_CLIENT_ID = os.environ.get("UMAMI_CF_ACCESS_CLIENT_ID", "")
+UMAMI_CF_ACCESS_CLIENT_SECRET = os.environ.get("UMAMI_CF_ACCESS_CLIENT_SECRET", "")
 
 # Cloud uses /v1 path prefix; self-hosted uses /api
 _is_cloud = bool(UMAMI_API_KEY)
@@ -38,11 +41,27 @@ def _get_auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {_self_hosted_token}"}
 
 
+def _get_request_headers() -> dict[str, str]:
+    """Return common headers for all outbound requests."""
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": UMAMI_USER_AGENT,
+    }
+    if UMAMI_CF_ACCESS_CLIENT_ID and UMAMI_CF_ACCESS_CLIENT_SECRET:
+        headers["CF-Access-Client-Id"] = UMAMI_CF_ACCESS_CLIENT_ID
+        headers["CF-Access-Client-Secret"] = UMAMI_CF_ACCESS_CLIENT_SECRET
+    return headers
+
+
 def _login_self_hosted() -> str:
     """Authenticate against a self-hosted Umami instance and return a JWT."""
     url = f"{UMAMI_URL}/api/auth/login"
     body = json.dumps({"username": UMAMI_USERNAME, "password": UMAMI_PASSWORD}).encode()
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    headers = {
+        **_get_request_headers(),
+        "Content-Type": "application/json",
+    }
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     with urllib.request.urlopen(req) as resp:
         data = json.loads(resp.read())
     return data["token"]
@@ -68,7 +87,9 @@ def _api_get(path: str, params: dict | None = None) -> object:
         clean = {k: v for k, v in params.items() if v is not None}
         if clean:
             url += "?" + urllib.parse.urlencode(clean)
-    req = urllib.request.Request(url, headers=_get_auth_headers())
+    req = urllib.request.Request(
+        url, headers={**_get_request_headers(), **_get_auth_headers()}
+    )
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read())
 
@@ -84,8 +105,16 @@ FILTER_PARAMS = [
     {"name": "query", "description": "Filter by query string", "required": False},
     {"name": "browser", "description": "Filter by browser name", "required": False},
     {"name": "os", "description": "Filter by operating system", "required": False},
-    {"name": "device", "description": "Filter by device type (desktop, mobile, tablet)", "required": False},
-    {"name": "country", "description": "Filter by country code (e.g. US, DE)", "required": False},
+    {
+        "name": "device",
+        "description": "Filter by device type (desktop, mobile, tablet)",
+        "required": False,
+    },
+    {
+        "name": "country",
+        "description": "Filter by country code (e.g. US, DE)",
+        "required": False,
+    },
     {"name": "region", "description": "Filter by region", "required": False},
     {"name": "city", "description": "Filter by city", "required": False},
     {"name": "hostname", "description": "Filter by hostname", "required": False},
@@ -97,7 +126,11 @@ FILTER_PARAMS = [
 
 def _pick_filters(args: dict) -> dict:
     """Extract filter params from tool arguments, dropping None values."""
-    return {p["name"]: args[p["name"]] for p in FILTER_PARAMS if args.get(p["name"]) is not None}
+    return {
+        p["name"]: args[p["name"]]
+        for p in FILTER_PARAMS
+        if args.get(p["name"]) is not None
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -141,8 +174,14 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "websiteId": {"type": "string", "description": "Website UUID"},
-                "startAt": {"type": "integer", "description": "Start timestamp in Unix milliseconds"},
-                "endAt": {"type": "integer", "description": "End timestamp in Unix milliseconds"},
+                "startAt": {
+                    "type": "integer",
+                    "description": "Start timestamp in Unix milliseconds",
+                },
+                "endAt": {
+                    "type": "integer",
+                    "description": "End timestamp in Unix milliseconds",
+                },
                 "compare": {
                     "type": "string",
                     "enum": ["prev", "yoy"],
@@ -165,8 +204,14 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "websiteId": {"type": "string", "description": "Website UUID"},
-                "startAt": {"type": "integer", "description": "Start timestamp in Unix milliseconds"},
-                "endAt": {"type": "integer", "description": "End timestamp in Unix milliseconds"},
+                "startAt": {
+                    "type": "integer",
+                    "description": "Start timestamp in Unix milliseconds",
+                },
+                "endAt": {
+                    "type": "integer",
+                    "description": "End timestamp in Unix milliseconds",
+                },
                 "unit": {
                     "type": "string",
                     "enum": ["minute", "hour", "day", "month", "year"],
@@ -199,15 +244,36 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "websiteId": {"type": "string", "description": "Website UUID"},
-                "startAt": {"type": "integer", "description": "Start timestamp in Unix milliseconds"},
-                "endAt": {"type": "integer", "description": "End timestamp in Unix milliseconds"},
+                "startAt": {
+                    "type": "integer",
+                    "description": "Start timestamp in Unix milliseconds",
+                },
+                "endAt": {
+                    "type": "integer",
+                    "description": "End timestamp in Unix milliseconds",
+                },
                 "type": {
                     "type": "string",
                     "enum": [
-                        "path", "entry", "exit", "referrer", "domain", "title",
-                        "query", "event", "tag", "hostname",
-                        "browser", "os", "device", "screen", "language",
-                        "country", "region", "city", "channel",
+                        "path",
+                        "entry",
+                        "exit",
+                        "referrer",
+                        "domain",
+                        "title",
+                        "query",
+                        "event",
+                        "tag",
+                        "hostname",
+                        "browser",
+                        "os",
+                        "device",
+                        "screen",
+                        "language",
+                        "country",
+                        "region",
+                        "city",
+                        "channel",
                     ],
                     "description": "Metric dimension to break down by",
                 },
@@ -334,11 +400,14 @@ def handle_request(msg: dict) -> dict | None:
 
     # --- Lifecycle ---
     if method == "initialize":
-        return _make_response(req_id, {
-            "protocolVersion": "2024-11-05",
-            "serverInfo": SERVER_INFO,
-            "capabilities": CAPABILITIES,
-        })
+        return _make_response(
+            req_id,
+            {
+                "protocolVersion": "2024-11-05",
+                "serverInfo": SERVER_INFO,
+                "capabilities": CAPABILITIES,
+            },
+        )
 
     if method == "notifications/initialized":
         return None  # notification, no response
@@ -356,26 +425,40 @@ def handle_request(msg: dict) -> dict | None:
         tool_args = params.get("arguments", {})
         handler = TOOL_HANDLERS.get(tool_name)
         if not handler:
-            return _make_response(req_id, {
-                "content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}],
-                "isError": True,
-            })
+            return _make_response(
+                req_id,
+                {
+                    "content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}],
+                    "isError": True,
+                },
+            )
         try:
             result = handler(tool_args)
-            return _make_response(req_id, {
-                "content": [{"type": "text", "text": json.dumps(result, indent=2)}],
-            })
+            return _make_response(
+                req_id,
+                {
+                    "content": [{"type": "text", "text": json.dumps(result, indent=2)}],
+                },
+            )
         except urllib.error.HTTPError as e:
             body = e.read().decode(errors="replace")
-            return _make_response(req_id, {
-                "content": [{"type": "text", "text": f"Umami API error {e.code}: {body}"}],
-                "isError": True,
-            })
+            return _make_response(
+                req_id,
+                {
+                    "content": [
+                        {"type": "text", "text": f"Umami API error {e.code}: {body}"}
+                    ],
+                    "isError": True,
+                },
+            )
         except Exception as e:
-            return _make_response(req_id, {
-                "content": [{"type": "text", "text": f"Error: {e}"}],
-                "isError": True,
-            })
+            return _make_response(
+                req_id,
+                {
+                    "content": [{"type": "text", "text": f"Error: {e}"}],
+                    "isError": True,
+                },
+            )
 
     # Unknown method
     if req_id is not None:

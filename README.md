@@ -129,8 +129,13 @@ Go to Settings → MCP Servers → Add Server, then enter:
 | `UMAMI_API_KEY` | Cloud | API key from Umami Cloud dashboard |
 | `UMAMI_USERNAME` | Self-hosted | Login username |
 | `UMAMI_PASSWORD` | Self-hosted | Login password |
+| `UMAMI_CF_ACCESS_CLIENT_ID` | Optional | Cloudflare Access service token client ID (for protected self-hosted APIs) |
+| `UMAMI_CF_ACCESS_CLIENT_SECRET` | Optional | Cloudflare Access service token secret |
+| `UMAMI_USER_AGENT` | Optional | Custom User-Agent for outbound requests (default: `umami-mcp/1.0`) |
 
 Set either `UMAMI_API_KEY` (Cloud) or both `UMAMI_USERNAME` + `UMAMI_PASSWORD` (self-hosted). The server auto-detects which mode to use.
+
+If your self-hosted Umami is behind Cloudflare Access, set both `UMAMI_CF_ACCESS_CLIENT_ID` and `UMAMI_CF_ACCESS_CLIENT_SECRET` so machine-to-machine MCP calls can pass Access checks.
 
 ## Usage Examples
 
