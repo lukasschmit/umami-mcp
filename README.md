@@ -138,6 +138,8 @@ For convenience, `UMAMI_URL` may include `/v1` (Cloud) or `/api` (self-hosted); 
 
 If your self-hosted Umami is behind Cloudflare Access, set both `UMAMI_CF_ACCESS_CLIENT_ID` and `UMAMI_CF_ACCESS_CLIENT_SECRET` so machine-to-machine MCP calls can pass Access checks.
 
+`get_metrics` accepts both `type="path"` and `type="url"` for compatibility across Umami versions.
+
 ## Usage Examples
 
 Once connected, you can ask your AI assistant things like:

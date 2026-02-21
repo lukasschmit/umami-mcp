@@ -102,11 +102,19 @@ def _api_get(path: str, params: dict | None = None) -> object:
         clean = {k: v for k, v in params.items() if v is not None}
         if clean:
             url += "?" + urllib.parse.urlencode(clean)
-    req = urllib.request.Request(
-        url, headers={**_get_request_headers(), **_get_auth_headers()}
-    )
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read())
+    req = urllib.request.Request(url, headers={**_get_request_headers(), **_get_auth_headers()})
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        # Self-hosted JWT can expire during long-lived MCP sessions.
+        if e.code == 401 and not _is_cloud:
+            global _self_hosted_token
+            _self_hosted_token = None
+            retry_req = urllib.request.Request(url, headers={**_get_request_headers(), **_get_auth_headers()})
+            with urllib.request.urlopen(retry_req) as resp:
+                return json.loads(resp.read())
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +279,7 @@ TOOLS = [
                     "type": "string",
                     "enum": [
                         "path",
+                        "url",
                         "entry",
                         "exit",
                         "referrer",
@@ -360,17 +369,25 @@ def handle_get_pageviews(args: dict) -> object:
 
 
 def handle_get_metrics(args: dict) -> object:
+    metric_type = args["type"]
     params = {
         "startAt": args["startAt"],
         "endAt": args["endAt"],
-        "type": args["type"],
+        "type": metric_type,
         **_pick_filters(args),
     }
     if args.get("limit") is not None:
         params["limit"] = args["limit"]
     if args.get("offset") is not None:
         params["offset"] = args["offset"]
-    return _api_get(f"/websites/{args['websiteId']}/metrics", params)
+    try:
+        return _api_get(f"/websites/{args['websiteId']}/metrics", params)
+    except urllib.error.HTTPError as e:
+        # Umami versions differ on whether this dimension is named "url" or "path".
+        if e.code == 400 and metric_type in {"url", "path"}:
+            params["type"] = "path" if metric_type == "url" else "url"
+            return _api_get(f"/websites/{args['websiteId']}/metrics", params)
+        raise
 
 
 def handle_get_active(args: dict) -> object:
