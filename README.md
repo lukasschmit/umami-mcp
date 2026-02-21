@@ -2,13 +2,13 @@
 
 An MCP server for [Umami Analytics](https://umami.is) — works with both **Umami Cloud** and **self-hosted** instances.
 
-**Zero dependencies.** Pure Python, single file, just run it.
+**Zero dependencies.** No cloning, no install steps — just point your MCP client at it.
 
 ## Why?
 
 Existing Umami MCP servers either [don't support Umami Cloud](https://github.com/Macawls/umami-mcp-server) (which uses API key auth, not username/password) or are [broken and bloated](https://github.com/jakeyShakey/umami_mcp_server) (torch, faiss, sentence-transformers for… analytics?).
 
-This server is a single Python file that talks to the Umami API and exposes 5 tools over MCP.
+This server talks to the Umami API and exposes 5 tools over MCP. Pure Python, zero dependencies.
 
 ## Tools
 
@@ -20,7 +20,7 @@ This server is a single Python file that talks to the Umami API and exposes 5 to
 | `get_metrics` | Breakdown by URL, referrer, browser, OS, device, country, event, etc. |
 | `get_active` | Number of currently active visitors (last 5 minutes) |
 
-## Setup
+## Quick Start
 
 ### 1. Get your credentials
 
@@ -28,7 +28,11 @@ This server is a single Python file that talks to the Umami API and exposes 5 to
 
 **Self-hosted:** Use the username and password you log in with.
 
-### 2. Configure your MCP client
+### 2. Add to your MCP client
+
+No cloning required — `uvx` fetches and runs it directly from GitHub.
+
+> **Requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/).** Install with: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
 #### Claude Desktop / Claude Code
 
@@ -39,8 +43,8 @@ Add to your MCP config (`~/.claude.json`, Claude Desktop settings, etc.):
 {
   "mcpServers": {
     "umami": {
-      "command": "python3",
-      "args": ["/absolute/path/to/server.py"],
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/lukasschmit/umami-mcp", "umami-mcp"],
       "env": {
         "UMAMI_URL": "https://api.umami.is",
         "UMAMI_API_KEY": "your_api_key_here"
@@ -55,8 +59,8 @@ Add to your MCP config (`~/.claude.json`, Claude Desktop settings, etc.):
 {
   "mcpServers": {
     "umami": {
-      "command": "python3",
-      "args": ["/absolute/path/to/server.py"],
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/lukasschmit/umami-mcp", "umami-mcp"],
       "env": {
         "UMAMI_URL": "https://your-umami-instance.com",
         "UMAMI_USERNAME": "admin",
@@ -75,8 +79,8 @@ Add to `.cursor/mcp.json` in your project root (or global settings):
 {
   "mcpServers": {
     "umami": {
-      "command": "python3",
-      "args": ["/absolute/path/to/server.py"],
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/lukasschmit/umami-mcp", "umami-mcp"],
       "env": {
         "UMAMI_URL": "https://api.umami.is",
         "UMAMI_API_KEY": "your_api_key_here"
@@ -95,8 +99,8 @@ Add to your VS Code `settings.json`:
   "mcp": {
     "servers": {
       "umami": {
-        "command": "python3",
-        "args": ["/absolute/path/to/server.py"],
+        "command": "uvx",
+        "args": ["--from", "git+https://github.com/lukasschmit/umami-mcp", "umami-mcp"],
         "env": {
           "UMAMI_URL": "https://api.umami.is",
           "UMAMI_API_KEY": "your_api_key_here"
@@ -111,8 +115,8 @@ Add to your VS Code `settings.json`:
 
 Go to Settings → MCP Servers → Add Server, then enter:
 
-- **Command:** `python3`
-- **Arguments:** `/absolute/path/to/server.py`
+- **Command:** `uvx`
+- **Arguments:** `--from git+https://github.com/lukasschmit/umami-mcp umami-mcp`
 - **Environment Variables:**
   - `UMAMI_URL` = `https://api.umami.is`
   - `UMAMI_API_KEY` = `your_api_key_here`

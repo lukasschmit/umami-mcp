@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "umami-mcp"
+version = "1.0.0"
+description = "MCP server for Umami Analytics — supports both Umami Cloud and self-hosted"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+umami-mcp = "umami_mcp.server:main"
