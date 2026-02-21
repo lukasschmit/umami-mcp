@@ -15,9 +15,9 @@ This server talks to the Umami API and exposes 5 tools over MCP. Pure Python, ze
 | Tool | Description |
 |------|-------------|
 | `get_websites` | List all tracked websites |
-| `get_stats` | Summary stats: pageviews, visitors, bounces, time on site |
-| `get_pageviews` | Time-series pageview data (bucketed by minute/hour/day/month/year) |
-| `get_metrics` | Breakdown by URL, referrer, browser, OS, device, country, event, etc. |
+| `get_stats` | Summary stats: pageviews, visitors, visits, bounces, totaltime (seconds) |
+| `get_pageviews` | Time-series pageview/session data (unit: minute/hour/day/month/year; timezone: IANA, e.g. UTC) |
+| `get_metrics` | Breakdown by type: path/url/entry/exit/referrer/domain/title/query/event/tag/hostname/browser/os/device/screen/language/country/region/city/channel |
 | `get_active` | Number of currently active visitors (last 5 minutes) |
 
 ## Quick Start
@@ -143,6 +143,7 @@ If your self-hosted Umami is behind Cloudflare Access, set both `UMAMI_CF_ACCESS
 `startAt` and `endAt` accept Unix-millisecond integers or numeric strings from MCP clients.
 For time-based tools, you can use `range` instead of raw timestamps:
 `last_24h`, `last_7d`, `last_30d`, `this_month`, `last_month`.
+`compare` supports `prev` (previous period, same length) and `yoy` (year-over-year).
 
 ## Usage Examples
 

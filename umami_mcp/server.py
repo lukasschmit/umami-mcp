@@ -237,6 +237,15 @@ def _resolve_time_range(args: dict) -> tuple[int, int]:
     raise ValueError(f"Invalid range: {range_name}")
 
 
+def _drop_none(value: object) -> object:
+    """Recursively drop null values to reduce MCP response noise."""
+    if isinstance(value, dict):
+        return {k: _drop_none(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_drop_none(v) for v in value]
+    return value
+
+
 # ---------------------------------------------------------------------------
 # Tool definitions (MCP schema)
 # ---------------------------------------------------------------------------
@@ -244,7 +253,10 @@ def _resolve_time_range(args: dict) -> tuple[int, int]:
 TOOLS = [
     {
         "name": "get_websites",
-        "description": "List all tracked websites in your Umami account.",
+        "description": (
+            "List all tracked websites in your Umami account. Use this first to get websiteId "
+            "for other tools."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -272,7 +284,8 @@ TOOLS = [
         "name": "get_stats",
         "description": (
             "Get summary statistics (pageviews, visitors, visits, bounces, totaltime) "
-            "for a website over a date range. Timestamps are Unix milliseconds."
+            "for a website over a date range. Use range (recommended) or startAt/endAt "
+            "(Unix milliseconds). totaltime is reported in seconds by Umami."
         ),
         "inputSchema": {
             "type": "object",
@@ -294,7 +307,10 @@ TOOLS = [
                 "compare": {
                     "type": "string",
                     "enum": ["prev", "yoy"],
-                    "description": "Compare with previous period ('prev') or year-over-year ('yoy')",
+                    "description": (
+                        "Comparison mode: 'prev' compares against the immediately preceding "
+                        "period of equal length; 'yoy' compares year-over-year."
+                    ),
                 },
                 **{
                     p["name"]: {"type": "string", "description": p["description"]}
@@ -308,6 +324,9 @@ TOOLS = [
         "name": "get_pageviews",
         "description": (
             "Get time-series pageview and session data for a website, bucketed by the chosen time unit."
+            " Use range (recommended) or startAt/endAt (Unix milliseconds)."
+            " unit must be one of: minute, hour, day, month, year."
+            " timezone should be an IANA timezone like America/Los_Angeles or UTC."
         ),
         "inputSchema": {
             "type": "object",
@@ -351,8 +370,10 @@ TOOLS = [
     {
         "name": "get_metrics",
         "description": (
-            "Get a breakdown of metrics by a given dimension (url, referrer, browser, os, "
-            "device, country, event, etc.) for a website."
+            "Get a breakdown of metrics by a given dimension for a website. Supported types: "
+            "path, url, entry, exit, referrer, domain, title, query, event, tag, hostname, "
+            "browser, os, device, screen, language, country, region, city, channel. "
+            "Use range (recommended) or startAt/endAt (Unix milliseconds)."
         ),
         "inputSchema": {
             "type": "object",
@@ -437,7 +458,7 @@ def handle_get_websites(args: dict) -> object:
     for key in ("search", "page", "pageSize", "includeTeams"):
         if args.get(key) is not None:
             params[key] = args[key]
-    return _api_get("/websites", params or None)
+    return _drop_none(_api_get("/websites", params or None))
 
 
 def handle_get_stats(args: dict) -> object:
