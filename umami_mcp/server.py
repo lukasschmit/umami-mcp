@@ -30,6 +30,20 @@ _is_cloud = bool(UMAMI_API_KEY)
 _self_hosted_token: str | None = None
 
 
+def _base_url() -> str:
+    """Return normalized API base URL for the current mode."""
+    base = UMAMI_URL.rstrip("/")
+    if _is_cloud:
+        if not base:
+            base = "https://api.umami.is"
+        if base.endswith("/v1"):
+            base = base[:-3]
+        return base
+    if base.endswith("/api"):
+        base = base[:-4]
+    return base
+
+
 def _get_auth_headers() -> dict[str, str]:
     """Return auth headers depending on configuration mode."""
     if _is_cloud:
@@ -55,7 +69,7 @@ def _get_request_headers() -> dict[str, str]:
 
 def _login_self_hosted() -> str:
     """Authenticate against a self-hosted Umami instance and return a JWT."""
-    url = f"{UMAMI_URL}/api/auth/login"
+    url = f"{_base_url()}/api/auth/login"
     body = json.dumps({"username": UMAMI_USERNAME, "password": UMAMI_PASSWORD}).encode()
     headers = {
         **_get_request_headers(),
@@ -74,9 +88,10 @@ def _login_self_hosted() -> str:
 
 def _api_url(path: str) -> str:
     """Build the full API URL. Cloud uses /v1 prefix, self-hosted uses /api."""
+    base = _base_url()
     if _is_cloud:
-        return f"{UMAMI_URL}/v1{path}"
-    return f"{UMAMI_URL}/api{path}"
+        return f"{base}/v1{path}"
+    return f"{base}/api{path}"
 
 
 def _api_get(path: str, params: dict | None = None) -> object:
@@ -467,9 +482,6 @@ def handle_request(msg: dict) -> dict | None:
 
 
 def main() -> None:
-    if not UMAMI_URL:
-        print("Error: UMAMI_URL environment variable is required", file=sys.stderr)
-        sys.exit(1)
     if not UMAMI_API_KEY and not (UMAMI_USERNAME and UMAMI_PASSWORD):
         print(
             "Error: Set UMAMI_API_KEY (for Umami Cloud) or both UMAMI_USERNAME and "
@@ -477,6 +489,17 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+    if not _is_cloud and not UMAMI_URL:
+        print("Error: UMAMI_URL environment variable is required for self-hosted mode", file=sys.stderr)
+        sys.exit(1)
+    if _is_cloud and UMAMI_URL:
+        host = urllib.parse.urlparse(_base_url()).netloc.lower()
+        if host == "cloud.umami.is":
+            print(
+                "Warning: UMAMI_URL points to cloud.umami.is. For Umami Cloud API, use "
+                "https://api.umami.is (or leave UMAMI_URL unset).",
+                file=sys.stderr,
+            )
 
     for line in sys.stdin:
         line = line.strip()
