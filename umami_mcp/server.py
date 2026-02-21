@@ -156,6 +156,13 @@ RANGE_DESCRIPTION = (
     "Use this instead of startAt/endAt to avoid timestamp mistakes."
 )
 
+RANGE_ALIASES = {
+    "24h": "last_24h",
+    "1d": "last_24h",
+    "7d": "last_7d",
+    "30d": "last_30d",
+}
+
 
 def _pick_filters(args: dict) -> dict:
     """Extract filter params from tool arguments, dropping None values."""
@@ -209,6 +216,9 @@ def _resolve_time_range(args: dict) -> tuple[int, int]:
             "Missing time range. Provide startAt/endAt (Unix ms) or range "
             "(last_24h, last_7d, last_30d, this_month, last_month)."
         )
+    if not isinstance(range_name, str):
+        raise ValueError("Invalid range: expected string")
+    range_name = RANGE_ALIASES.get(range_name.strip().lower(), range_name.strip().lower())
 
     now = int(time.time() * 1000)
     if range_name == "last_24h":
